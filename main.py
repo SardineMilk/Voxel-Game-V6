@@ -57,9 +57,9 @@ def sort_voxels(input_array, point):
     return output_array
 
 
-def process_voxel(pos):
+def process_voxel(voxel_position):
     # Keep decoupled from pygame for future multiprocessing
-    voxel_x, voxel_y, voxel_z = pos
+    voxel_x, voxel_y, voxel_z = voxel_position
     voxel_type = voxels[voxel_x, voxel_y, voxel_z]
     processed_voxel = []
 
@@ -67,7 +67,7 @@ def process_voxel(pos):
     for vertex in VERTICES:
         x, y, z = vertex
         processed_vertex = float(x), float(y), float(z)
-        processed_vertex += pos
+        processed_vertex += voxel_position
         processed_vertex += camera.position
         processed_vertex = rotate_vertex(processed_vertex, camera.pitch, camera.yaw, camera.roll)
 
@@ -75,7 +75,7 @@ def process_voxel(pos):
 
     for i, face in enumerate(FACES):
         projected_face = ()  # Pygame polygons need a tuple instead of a list
-        visible = check_visibility(i, pos)
+        visible = check_visibility(i, voxel_position)
         if visible:
             for vertex_index in face:
                 vertex = processed_vertices[vertex_index]
