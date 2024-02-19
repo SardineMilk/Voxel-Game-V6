@@ -1,5 +1,5 @@
 import numpy as np
-from math import sin, cos
+from math import sin, cos, radians
 import pygame
 from pygame.locals import *
 from pygame import gfxdraw
@@ -103,31 +103,31 @@ def rotate_vertex(point, pitch, yaw, roll):
 
     # Store the trig for efficiency
     cos_pitch, sin_pitch = cos(pitch), sin(pitch)
-    cos_yaw, sin_yaw = cos(yaw), sin(yaw)
+    cos_yaw, sin_yaw = cos(-yaw), sin(-yaw)
     cos_roll, sin_roll = cos(roll), sin(roll)
 
-    # Rotate x-axis (pitch)
-    x_pitch = x
-    y_pitch = y * cos_pitch - z * sin_pitch
-    z_pitch = y * sin_pitch + z * cos_pitch
+    # Apply yaw rotation - y-axis
+    x_yaw = x * cos_yaw + z * sin_yaw
+    y_yaw = y
+    z_yaw = -x * sin_yaw + z * cos_yaw
 
-    # Rotate y-axis (yaw)
-    x_yaw = x_pitch * cos_yaw + z_pitch * sin_yaw
-    y_yaw = y_pitch
-    z_yaw = -x_pitch * sin_yaw + z_pitch * cos_yaw
+    # Apply pitch rotation - x-axis
+    x_pitch = x_yaw
+    y_pitch = y_yaw * cos_pitch - z_yaw * sin_pitch
+    z_pitch = y_yaw * sin_pitch + z_yaw * cos_pitch
 
-    # Rotate z-axis (roll)
-    x_roll = x_yaw * cos_roll - y_yaw * sin_roll
-    y_roll = x_yaw * sin_roll + y_yaw * cos_roll
-    z_roll = z_yaw
+    # Apply roll rotation - z-axis
+    x_roll = x_pitch * cos_roll - y_pitch * sin_roll
+    y_roll = x_pitch * sin_roll + y_pitch * cos_roll
+    z_roll = z_pitch
 
     return x_roll, y_roll, z_roll
 
 
 def project_vertex(vertex):
     x, y, z = vertex
-    x_2d = (FOCAL_LENGTH * (x / z) + 1) * WIDTH / 2
-    y_2d = (FOCAL_LENGTH * (y / z) + 1) * WIDTH / 2
+    x_2d = (FOCAL_LENGTH * (x / z) + 1) * centre_x
+    y_2d = (FOCAL_LENGTH * (y / z) + 1) * centre_y
 
     return int(x_2d), int(y_2d)
 
@@ -148,6 +148,10 @@ def check_visibility(face_index, voxel_pos):
         return False
 
     return True
+
+
+def clamp(n, minn, maxn):
+    return min(maxn, max(n, minn))
 
 
 # Position of each vertex relative to the voxel's position
@@ -189,12 +193,14 @@ voxel_types = [
 pygame.init()
 WIDTH, HEIGHT = 800, 800  # Base resolution for display
 screen = pygame.display.set_mode((WIDTH, HEIGHT))
+centre_x, centre_y = screen.get_width()/2, screen.get_height()/2
 clock = pygame.time.Clock()
 
-BACKFACE_TOLERANCE = -0.3
+BACKFACE_TOLERANCE = -0.2
 FRUSTUM_TOLERANCE = 0.5
 FOCAL_LENGTH = 1
 MAX_FPS = 60
+MOUSE_SENSITIVITY = radians(0.25)
 
 camera = Camera((0.0, 1.0, 5.0), 0, 0, 0)
 voxels = np.zeros((16, 16, 16), dtype=int)
@@ -206,10 +212,18 @@ voxels[1, 2, 3] = 2
 running = True
 while running:
     # Player logic
-    for event in pygame.event.get():
-        pass
+    for event in pygame.event.get():  # Movement breaks without this for some reason
+        if event.type == MOUSEMOTION:
+            mouse_dx, mouse_dy = event.rel
+            camera.yaw += mouse_dx * MOUSE_SENSITIVITY
+            camera.pitch += mouse_dy * MOUSE_SENSITIVITY
+            camera.pitch = clamp(camera.pitch, -90, 90)  # Clamp camera pitch within -89 to 89 degrees
     keys = pygame.key.get_pressed()
     camera = move_camera()
+
+    pygame.mouse.set_visible(False)
+    pygame.mouse.set_pos(centre_x, centre_y)
+    pygame.event.set_grab(True)
 
     # Process the voxels
     filtered_voxels = np.argwhere(voxels != 0)  # Array of the indices of non-zero voxels
@@ -222,6 +236,7 @@ while running:
         for quad in voxel:
             shape, colour = quad
             pygame.gfxdraw.filled_polygon(screen, shape, colour)
+            pygame.gfxdraw.aapolygon(screen, shape, (255, 255, 255))
 
     pygame.display.flip()
     clock.tick(MAX_FPS)
