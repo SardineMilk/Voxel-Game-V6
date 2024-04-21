@@ -4,6 +4,7 @@ import pygame
 from pygame.locals import *
 from pygame.math import *
 from pygame import gfxdraw
+
 """
 import profiler
 profiler.profiler().start(True)
@@ -105,9 +106,6 @@ def process_voxel(voxel_position):
             # Fetch the voxel colour.
             # Doing it here instead of at the start allows for more flexible shading i.e. voxel position based
             voxel_colour = voxel_types[voxel_type - 1]  # -1 because 0 is air
-            r, g, b = FACE_NORMALS[face_index]
-            r, g, b = (r+1)*127.75, (g+1)*127.75, (b+1)*127.75
-            voxel_colour = r, g, b
             processed_face_data = projected_face, voxel_colour
             processed_voxel.append(processed_face_data)
 
@@ -128,7 +126,7 @@ def rotate_vertex(vertex, yaw, pitch, roll):
     # Rotate Pitch - X
     vertex = vertex.rotate(pitch, Vector3(1, 0, 0))
     # Rotate Roll - Z
-    vertex = vertex.rotate(roll, Vector3(0, 0, 1))
+    # vertex = vertex.rotate(roll, Vector3(0, 0, 1))
 
     return vertex
 
@@ -143,6 +141,11 @@ def check_visibility(face_index, voxel_pos):
 
     # Backface culling - If it's facing away from the camera, cull it
     relative_pos = voxel_pos + camera.position + (0.5, 0.5, 0.5)
+
+    # This is literally the most scuffed piece of code I've ever written
+    if face_index == 2:
+        relative_pos += (1, 0, 0)
+
     camera_dir = np.array(VERTICES[face_index]) - relative_pos
     face_to_camera = np.dot(normal, camera_dir)  # Dot product of the face normal to the camera
     if face_to_camera > BACKFACE_TOLERANCE:
@@ -200,7 +203,7 @@ clock = pygame.time.Clock()
 time = 0
 
 BACKFACE_TOLERANCE = -0.5
-FRUSTUM_TOLERANCE = 0.5
+FRUSTUM_TOLERANCE = 0.25
 FOCAL_LENGTH = 1
 MAX_FPS = 120
 MOUSE_SENSITIVITY = 0.25
@@ -240,7 +243,6 @@ while running:
     time = current_time
 
     camera = move_camera()
-    print(camera.position)
 
     # Process the voxels
     filtered_voxels = np.argwhere(voxels != 0)  # Array of the indices of non-zero voxels
