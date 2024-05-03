@@ -1,6 +1,7 @@
 import numpy as np
 from math import sin, cos, radians
 import pygame
+import pygame.freetype
 from pygame.locals import *
 from pygame.math import *
 from pygame import gfxdraw
@@ -10,7 +11,6 @@ from random import randint
 import profiler
 profiler.profiler().start(True)
 """
-
 
 class Camera:
     def __init__(self, camera_position, camera_yaw, camera_pitch, camera_roll):
@@ -56,7 +56,7 @@ def sort_voxels(input_array, point):
 
 
 def process_face(face):
-    position, index, width, height = face
+    position, index = face
     voxel_x, voxel_y, voxel_z = position
     voxel_type = voxels[voxel_x, voxel_y, voxel_z]
     face = FACES[index]
@@ -89,9 +89,8 @@ def process_face(face):
         # Fetch the voxel colour.
         # Doing it here instead of at the start allows for more flexible shading i.e. voxel position based
         voxel_colour = voxel_types[voxel_type - 1]  # -1 because 0 is air
-        processed_face_data = projected_face, voxel_colour
 
-        return processed_face_data
+        return projected_face, voxel_colour
 
 
 def project_vertex(vertex):
@@ -124,10 +123,10 @@ def check_visibility(face_index, voxel_pos):
     # 3blue1brown has a wonderful linear algebra video explaining this: https://www.youtube.com/watch?v=LyGKycYT2v0
     face_to_camera = np.dot(normal, relative_pos)
 
-    if face_to_camera > -0.5:  # Add a slight bias to prevent faces popping out of view too late
-        return False
+    # Use a slight bias to prevent shapes being culled incorrectly
+    is_visible = face_to_camera <= -0.5
 
-    return True
+    return is_visible
 
 
 def construct_mesh(input_voxels):
@@ -141,9 +140,9 @@ def construct_mesh(input_voxels):
 
             check_x, check_y, check_z = voxel_pos + face_normal
             if voxels[check_x, check_y, check_z] == 0:
-                mesh.append((voxel_pos, face_index, 1, 1))  # voxel_pos, face_index, width, height
+                mesh.append((voxel_pos, face_index))
 
-    #mesh = greedy_mesh(mesh)
+    # mesh = greedy_mesh(mesh)
 
     return mesh
 
@@ -152,7 +151,7 @@ def greedy_mesh(mesh):
     processed_mesh = []
     for face_data in mesh:
         voxel_pos, face_index = face_data
-        processed_mesh.append((voxel_pos, face_index, 1, 1))
+        processed_mesh.append((voxel_pos, face_index, 1, 1))    # voxel_pos, face_index, width, height
 
     return processed_mesh
 
@@ -198,20 +197,24 @@ voxel_types = [
     (255, 255, 0),
 ]
 
+# Constants
+WIDTH, HEIGHT = 800, 800  # Base resolution for display
+FRUSTUM_TOLERANCE = 0.25
+MAX_FPS = 9999
+MOUSE_SENSITIVITY = 0.25
+MOVE_SPEED = 5
+
 # Setup pygame and display
 pygame.init()
-WIDTH, HEIGHT = 800, 800  # Base resolution for display
 screen = pygame.display.set_mode((WIDTH, HEIGHT))
 centre_x, centre_y = screen.get_width()/2, screen.get_height()/2
 clock = pygame.time.Clock()
 time = 0
 
-FRUSTUM_TOLERANCE = 0.25
-MAX_FPS = 9999
-MOUSE_SENSITIVITY = 0.25
-MOVE_SPEED = 5
-frames = 0
+# Setup text display
+font = pygame.freetype.Font(pygame.font.get_default_font(), 24)
 
+frames = 0
 camera = Camera(Vector3(0.0, -5.0, 0.0), 0, 0, 0)
 voxels = np.zeros((16, 16, 16), dtype=int)
 geometry_changed = True
@@ -256,7 +259,7 @@ while running:
     current_time = pygame.time.get_ticks()
     delta = current_time - time
     time = current_time
-    print(round(1000/delta, 2))
+    fps = str(round(1000/delta, 2))
 
     camera = move_camera()
 
@@ -275,6 +278,9 @@ while running:
         shape, colour = face_data
         pygame.gfxdraw.filled_polygon(screen, shape, colour)
         pygame.gfxdraw.aapolygon(screen, shape, (127, 127, 127))
+
+    # Display fps
+    text_surface = font.render_to(screen, (1, 1), fps,(255, 255, 255))
 
     pygame.display.flip()
     clock.tick(MAX_FPS)
